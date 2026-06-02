@@ -81,7 +81,7 @@
     }
     /* gastronomia: acento bordô */
     .pin-food .pin-dot { width: 14px; height: 14px; background: var(--pin-food); }
-    /* base (Palazzo Alfeo): cobre escuro, losango */
+    /* base (ponto de partida): cobre escuro, losango */
     .pin-base .pin-dot { width: 15px; height: 15px; background: var(--pin-base); border-radius: 3px; transform: rotate(45deg); }
 
     /* pin ativo (sincronizado com a timeline) */
@@ -672,7 +672,7 @@
 
             // ajusta o enquadramento aos pontos
             const group = L.featureGroup(Object.values(this.markers));
-            this.map.fitBounds(group.getBounds().pad(0.25));
+            this.map.fitBounds(group.getBounds().pad(0.25), { animate: !this.prefersReducedMotion() });
             setTimeout(() => this.map.invalidateSize(), 200);
 
             this.setActive(this.allPontos[0].id, false);
