@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+  <title>Noto · Itinerário Quiet Luxury</title>
+  <meta name="description" content="Guia interativo de alto padrão para uma manhã pela cidade barroca de Noto, Sicília — do eixo geométrico ao abastecimento clássico." />
+
+  <!-- ===== Web-app no iPhone (homescreen, barra de status integrada) ===== -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Noto" />
+  <meta name="theme-color" content="#0c0f12" />
+  <meta name="format-detection" content="telephone=no" />
+
+  <!-- ===== Tipografia ===== -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet" />
+
+  <!-- ===== Leaflet (mapa escuro, sem token) ===== -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- ===== Tailwind ===== -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            charcoal: '#0c0f12',
+            ink:      '#11161b',
+            slatecard:'#161c23',
+            line:     '#232c36',
+            ice:      '#eef2f4',
+            mute:     '#9aa6b1',
+            faint:    '#65727e',
+            emerald:  '#1f6f5c',     // acento esmeralda escuro
+            emeraldlt:'#3a9c84',
+            bordeaux: '#6e1f2b',     // acento bordô profundo
+            bordeauxlt:'#a8404f',
+            gold:     '#c9a86a'
+          },
+          fontFamily: {
+            serif: ['"Playfair Display"', 'Georgia', 'serif'],
+            sans:  ['Inter', 'system-ui', 'sans-serif']
+          },
+          letterSpacing: { tightserif: '-0.01em' }
+        }
+      }
+    }
+  </script>
+
+  <!-- ===== Alpine.js ===== -->
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <style>
+    :root { color-scheme: dark; }
+    * { -webkit-tap-highlight-color: transparent; }
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+    html, body { height: 100%; }
+    /* App-shell: a página não rola; só o bottom sheet rola por dentro */
+    body {
+      background: #0c0f12; -webkit-font-smoothing: antialiased;
+      height: 100vh; height: 100dvh;
+      overflow: hidden; overscroll-behavior: none;
+      touch-action: manipulation;
+    }
+
+    /* ===== Alturas responsivas (vh com fallback → dvh evita o "pulo" da barra no Safari iOS) ===== */
+    #map      { height: 46vh; height: 46dvh; }
+    .veil     { top: 34vh;  top: 34dvh;  height: 11vh; height: 11dvh; }
+    .sheet-wrap { top: 42vh; top: 42dvh; }
+
+    /* Mapa claro — fundo pergaminho e atribuição discreta */
+    #map { background: #e7d8bf; touch-action: pan-x pan-y; }
+    .leaflet-container { font-family: 'Inter', sans-serif; }
+    .leaflet-control-attribution {
+      background: rgba(247,238,224,.7) !important;
+      color: #7a6748 !important; font-size: 9px !important;
+      backdrop-filter: blur(6px);
+    }
+    .leaflet-control-attribution a { color: #5c4a2e !important; }
+    .leaflet-control-zoom { display: none; }
+
+    /* Tiles claras (Positron) viradas para um tom quente amarelo-cobre/âmbar */
+    .leaflet-tile { filter: sepia(.92) saturate(1.5) hue-rotate(-20deg) brightness(.98) contrast(.97); }
+
+    /* ===== Pins customizados ===== */
+    .pin { position: relative; display:flex; align-items:center; justify-content:center; }
+    .pin-dot {
+      border-radius: 9999px; transition: all .35s cubic-bezier(.4,0,.2,1);
+      border: 1.5px solid rgba(255,250,242,.9); box-shadow: 0 1px 6px rgba(60,40,15,.55);
+    }
+    /* periférico: pequeno e discreto (escuro p/ contraste no mapa claro) */
+    .pin-peripheral .pin-dot { width: 10px; height: 10px; background: #4a3f30; }
+    /* foco: maior, acento esmeralda + anel */
+    .pin-focus .pin-dot { width: 15px; height: 15px; background: #155446; }
+    .pin-focus::after {
+      content:''; position:absolute; width:30px; height:30px; border-radius:9999px;
+      border:1.5px solid rgba(21,84,70,.55);
+    }
+    /* gastronomia: acento bordô */
+    .pin-food .pin-dot { width: 14px; height: 14px; background: #8c2230; }
+    /* base (Palazzo Alfeo): cobre escuro, losango */
+    .pin-base .pin-dot { width: 15px; height: 15px; background: #9a6b27; border-radius: 3px; transform: rotate(45deg); }
+
+    /* pin ativo (sincronizado com a timeline) */
+    .pin-active .pin-dot { transform: scale(1.7); box-shadow: 0 0 0 5px rgba(21,84,70,.22), 0 3px 12px rgba(60,40,15,.5); }
+    .pin-active.pin-base .pin-dot { transform: rotate(45deg) scale(1.6); }
+    .pin-active::after { width:46px; height:46px; border-color: rgba(21,84,70,.75); }
+
+    /* ===== Fade-in no scroll (lazy reveal) ===== */
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1); }
+    .reveal.in { opacity: 1; transform: none; }
+
+    /* Imagem com fade-in ao carregar */
+    .ph-img { background: linear-gradient(135deg,#1a222b 0%,#11161b 100%); }
+    .ph-img img { opacity: 0; transition: opacity .8s ease; }
+    .ph-img img.loaded { opacity: 1; }
+
+    /* Rolagem do sheet/modal: momentum nativo + sem encadear pro fundo */
+    .sheet { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+    .sheet::-webkit-scrollbar { width: 6px; }
+    .sheet::-webkit-scrollbar-thumb { background: #232c36; border-radius: 9px; }
+    .sheet::-webkit-scrollbar-track { background: transparent; }
+
+    /* Glassmorphism do modal */
+    .glass {
+      background: rgba(22,28,35,.72);
+      backdrop-filter: blur(22px) saturate(1.2);
+      -webkit-backdrop-filter: blur(22px) saturate(1.2);
+      border: 1px solid rgba(238,242,244,.10);
+    }
+
+    /* Transições do modal */
+    [x-cloak] { display: none !important; }
+
+    /* linha vertical da timeline */
+    .tl-line { background: linear-gradient(to bottom, transparent, #232c36 12%, #232c36 88%, transparent); }
+
+    @media (min-width: 1024px) {
+      .leaflet-control-zoom { display: block; }
+      .leaflet-control-zoom a {
+        background:#161c23 !important; color:#9aa6b1 !important; border-color:#232c36 !important;
+      }
+    }
+  </style>
+</head>
+
+<body x-data="ortigiaGuide()" x-init="init()" class="font-sans text-ice antialiased overflow-x-hidden">
+
+  <!-- ============================================================= -->
+  <!-- A. MAPA FIXO (metade superior / background)                   -->
+  <!-- ============================================================= -->
+  <header class="fixed top-0 inset-x-0 z-30 pointer-events-none">
+    <div class="px-5 pt-[calc(env(safe-area-inset-top)+1rem)] pb-14
+                bg-gradient-to-b from-charcoal via-charcoal/75 to-transparent">
+      <p class="text-[10px] tracking-[0.45em] text-ice/60 uppercase">Sicília · Val di Noto</p>
+      <h1 class="font-serif text-2xl text-ice mt-1 leading-none drop-shadow-[0_1px_8px_rgba(0,0,0,.6)]">Noto</h1>
+      <p class="text-[11px] text-ice/75 mt-1.5 tracking-wide">Uma manhã · 08h30 → 13h30 · 6 paragens</p>
+    </div>
+  </header>
+
+  <!-- O mapa fica SEMPRE visível no topo; só o sheet rola por baixo -->
+  <div id="map" class="fixed top-0 inset-x-0 z-0"></div>
+
+  <!-- véu inferior para fundir mapa ↔ folha -->
+  <div class="veil fixed inset-x-0 z-10 pointer-events-none
+              bg-gradient-to-b from-transparent to-charcoal"></div>
+
+  <!-- ============================================================= -->
+  <!-- B. TIMELINE — Bottom Sheet fixo, com rolagem interna           -->
+  <!-- ============================================================= -->
+  <main class="sheet-wrap fixed inset-x-0 bottom-0 z-20">
+    <section x-ref="sheet" @scroll.passive="onSheetScroll($event)"
+             class="sheet h-full overflow-y-auto rounded-t-[28px] bg-charcoal border-t border-line/60 shadow-[0_-20px_60px_rgba(0,0,0,.6)]">
+
+      <!-- alça da folha -->
+      <div class="flex flex-col items-center pt-3 pb-1">
+        <div class="w-10 h-1 rounded-full bg-line"></div>
+      </div>
+
+      <!-- cabeçalho da jornada -->
+      <div class="px-6 pt-4 pb-2">
+        <div class="flex items-end justify-between">
+          <div>
+            <p class="text-[10px] tracking-[0.4em] text-emeraldlt uppercase">O Itinerário</p>
+            <h2 class="font-serif text-[26px] leading-tight text-ice mt-1">A Jornada em Três Atos</h2>
+          </div>
+          <span class="font-serif italic text-faint text-sm pb-1" x-text="activeLabel"></span>
+        </div>
+        <p class="text-[13px] text-mute mt-3 leading-relaxed font-light max-w-prose">
+          De <span class="text-ice">Porta Reale</span> a <span class="text-ice">Santa Chiara</span>, uma linha reta
+          que sobe o Corso Vittorio Emanuele — do <span class="text-emeraldlt">eixo geométrico</span> nascido do
+          terramoto de 1693 ao <span class="text-bordeauxlt">abastecimento clássico</span> siciliano.
+          Toque em cada ponto para abri-lo no mapa ou no Google Maps.
+        </p>
+      </div>
+
+      <!-- Linha do tempo -->
+      <div class="relative px-6 pt-6 pb-[calc(11rem+env(safe-area-inset-bottom))]">
+        <!-- eixo vertical -->
+        <div class="tl-line absolute left-[34px] top-0 bottom-32 w-px"></div>
+
+        <!-- ATOS + PONTOS (renderizados via Alpine a partir do JSON) -->
+        <template x-for="(ato, ai) in atos" :key="ato.id">
+          <div class="mb-2">
+            <!-- Cabeçalho do Ato -->
+            <div class="reveal flex items-center gap-3 mb-5 mt-9 first:mt-0" data-reveal>
+              <span class="relative z-10 flex h-5 w-5 items-center justify-center rounded-full
+                           bg-charcoal border border-emerald/70 ml-[15px]">
+                <span class="h-1.5 w-1.5 rounded-full bg-emeraldlt"></span>
+              </span>
+              <div class="ml-2">
+                <p class="text-[10px] tracking-[0.35em] uppercase text-faint" x-text="ato.faixa"></p>
+                <h3 class="font-serif text-lg text-ice leading-tight" x-text="ato.titulo"></h3>
+              </div>
+            </div>
+
+            <!-- Pontos do Ato -->
+            <template x-for="p in ato.pontos" :key="p.id">
+              <article
+                :data-ponto="p.id"
+                class="reveal relative pl-[52px] mb-4 cursor-pointer group"
+                data-reveal
+                @click="p.tipo==='foco' || p.tipo==='food' || p.tipo==='base' ? openModal(p) : focusPoint(p.id)">
+
+                <!-- marcador no eixo -->
+                <span class="absolute left-[30px] top-2.5 -translate-x-1/2 z-10">
+                  <span class="block rounded-full transition-all duration-300"
+                        :class="{
+                          'h-2 w-2 bg-faint': p.tipo==='peripheral',
+                          'h-3 w-3 bg-emeraldlt ring-2 ring-emerald/30': p.tipo==='foco',
+                          'h-3 w-3 bg-bordeauxlt': p.tipo==='food',
+                          'h-3 w-3 bg-gold rotate-45 rounded-sm': p.tipo==='base',
+                          'scale-150': activeId===p.id
+                        }"></span>
+                </span>
+
+                <!-- ---- CARD PERIFÉRICO (discreto) ---- -->
+                <template x-if="p.tipo==='peripheral'">
+                  <div class="py-2.5 -my-1 min-h-[44px] flex flex-col justify-center transition-opacity active:opacity-100"
+                       :class="activeId===p.id ? 'opacity-100' : 'opacity-65 group-hover:opacity-100'">
+                    <div class="flex items-baseline gap-2">
+                      <span class="text-[11px] tabular-nums text-faint" x-text="p.hora"></span>
+                      <h4 class="text-[14px] text-mute group-hover:text-ice transition-colors" x-text="p.nome"></h4>
+                    </div>
+                    <p class="text-[12px] text-faint mt-0.5 leading-snug font-light" x-text="p.linha"></p>
+                  </div>
+                </template>
+
+                <!-- ---- CARD DE FOCO / GASTRONOMIA / BASE (grande, expansível) ---- -->
+                <template x-if="p.tipo!=='peripheral'">
+                  <div class="rounded-2xl overflow-hidden bg-slatecard border transition-all duration-300
+                              group-hover:border-line"
+                       :class="{
+                         'border-emerald/40': p.tipo==='foco' && activeId===p.id,
+                         'border-bordeaux/40': p.tipo==='food' && activeId===p.id,
+                         'border-gold/40': p.tipo==='base' && activeId===p.id,
+                         'border-line/60': activeId!==p.id
+                       }">
+                    <!-- imagem com lazy fade-in -->
+                    <div class="ph-img relative h-40 w-full overflow-hidden">
+                      <img loading="lazy" :src="p.img" :alt="p.nome"
+                           class="h-full w-full object-cover"
+                           @load="$el.classList.add('loaded')" />
+                      <div class="absolute inset-0 bg-gradient-to-t from-slatecard via-slatecard/10 to-transparent"></div>
+                      <!-- etiqueta de tipo -->
+                      <span class="absolute top-3 left-3 text-[9px] tracking-[0.3em] uppercase px-2.5 py-1 rounded-full
+                                   glass"
+                            :class="{
+                              'text-emeraldlt': p.tipo==='foco',
+                              'text-bordeauxlt': p.tipo==='food',
+                              'text-gold': p.tipo==='base'
+                            }"
+                            x-text="p.tipo==='food' ? 'Pausa' : (p.tipo==='base' ? 'Base' : 'Foco')"></span>
+                    </div>
+
+                    <div class="p-4">
+                      <div class="flex items-baseline justify-between gap-3">
+                        <h4 class="font-serif text-[19px] text-ice leading-tight" x-text="p.nome"></h4>
+                        <span class="text-[11px] tabular-nums text-faint shrink-0" x-text="p.hora"></span>
+                      </div>
+                      <p class="text-[13px] text-mute mt-2 leading-relaxed font-light" x-text="p.linha"></p>
+
+                      <div class="flex items-center justify-between mt-4">
+                        <div class="flex items-center gap-3 text-[11px] text-faint">
+                          <span x-show="p.custo" class="flex items-center gap-1">
+                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" d="M12 6v12m-3-9h4a2 2 0 010 4H9m6 0h-1"/></svg>
+                            <span x-text="p.custo"></span>
+                          </span>
+                          <span class="flex items-center gap-1">
+                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" d="M12 7v5l3 2"/></svg>
+                            <span x-text="p.duracao"></span>
+                          </span>
+                        </div>
+                        <span class="text-[11px] tracking-wide flex items-center gap-1 transition-colors"
+                              :class="{
+                                'text-emeraldlt': p.tipo==='foco',
+                                'text-bordeauxlt': p.tipo==='food',
+                                'text-gold': p.tipo==='base'
+                              }">
+                          Detalhes
+                          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </article>
+            </template>
+          </div>
+        </template>
+
+        <!-- nota de fecho -->
+        <div class="reveal pl-[52px] mt-12 pr-2" data-reveal>
+          <p class="font-serif italic text-mute text-[15px] leading-relaxed">
+            “Noto não foi reconstruída: foi inventada. Uma cidade barroca desenhada do zero
+            sobre uma grelha — onde até a <span class="text-gold not-italic">curva de Santa Chiara</span>
+            é uma decisão deliberada contra a linha reta.”
+          </p>
+          <p class="text-[11px] text-faint mt-6 leading-relaxed font-light border-t border-line/50 pt-5">
+            Roteiro completo — <span class="text-mute">6 paragens</span> em três atos, das 08h30 às 13h30,
+            subindo o Corso Vittorio Emanuele. Toque nos pontos de <span class="text-emeraldlt">foco</span> e nas
+            <span class="text-bordeauxlt">pausas</span> para abrir os detalhes ou a rota no Google Maps;
+            role para que o mapa siga a jornada.
+          </p>
+
+          <!-- Créditos das imagens (atribuição exigida pelas licenças) -->
+          <details class="mt-6 border-t border-line/50 pt-5 group">
+            <summary class="text-[11px] tracking-[0.25em] uppercase text-faint cursor-pointer list-none flex items-center gap-2 active:text-mute">
+              <svg class="w-3.5 h-3.5 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+              Créditos das imagens
+            </summary>
+            <p class="text-[11px] text-faint mt-4 leading-relaxed font-light">
+              Todas as fotografias são reais e de licença livre, via <span class="text-mute">Wikimedia Commons</span>.
+              Os monumentos têm a imagem exata; nas pausas gastronómicas (Caffè Sicilia, Siculamente) —
+              que não possuem foto de licença livre — usa-se uma fotografia real do prato/categoria
+              (granita com brioche, panino com porchetta), jamais um placeholder.
+            </p>
+            <ul class="mt-4 space-y-1.5 text-[10.5px] text-faint font-light leading-snug">
+              <li>· <span class="text-mute">Porta Reale</span> — Effems, CC0</li>
+              <li>· <span class="text-mute">Palazzo Nicolaci · varandas (mascheroni)</span> — sailko, CC BY 2.5</li>
+              <li>· <span class="text-mute">Cattedrale di San Nicolò</span> — Berthold Werner, CC BY-SA 4.0</li>
+              <li>· <span class="text-mute">Granita com brioche</span> (Caffè Sicilia) — Auregann, CC BY-SA 4.0</li>
+              <li>· <span class="text-mute">Panino com porchetta</span> (Siculamente) — Nicholas Gemini, CC BY-SA 4.0</li>
+              <li>· <span class="text-mute">Chiesa di Santa Chiara</span> — sailko, CC BY 2.5</li>
+            </ul>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Botão flutuante: voltar ao início da timeline -->
+  <button x-show="sheetScrolled" x-cloak
+          x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0"
+          x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+          @click="scrollSheetTop()" aria-label="Voltar ao início"
+          class="fixed right-4 z-40 h-12 w-12 rounded-full glass flex items-center justify-center text-emeraldlt active:scale-90 transition"
+          style="bottom: calc(1rem + env(safe-area-inset-bottom));">
+    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7"/></svg>
+  </button>
+
+  <!-- ============================================================= -->
+  <!-- MODAL — Glassmorphism (sobe de baixo)                         -->
+  <!-- ============================================================= -->
+  <div x-cloak x-show="modal.open" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+    <!-- backdrop -->
+    <div x-show="modal.open"
+         x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+         @click="closeModal()"
+         class="absolute inset-0 bg-charcoal/70 backdrop-blur-sm"></div>
+
+    <!-- painel -->
+    <div x-ref="panel" x-show="modal.open"
+         x-transition:enter="transition ease-out duration-400" x-transition:enter-start="translate-y-full sm:translate-y-6 opacity-0" x-transition:enter-end="translate-y-0 opacity-100"
+         x-transition:leave="transition ease-in duration-250" x-transition:leave-start="translate-y-0 opacity-100" x-transition:leave-end="translate-y-full opacity-0"
+         class="glass relative w-full sm:max-w-lg sm:rounded-3xl rounded-t-3xl max-h-[92dvh] overflow-y-auto sheet
+                shadow-[0_-20px_80px_rgba(0,0,0,.7)]">
+
+      <!-- imagem topo + zona de arrasto (deslize ↓ para fechar) -->
+      <div @touchstart.passive="dragStart($event)" @touchmove.passive="dragMove($event)" @touchend="dragEnd()"
+           class="ph-img relative h-52 w-full overflow-hidden sm:rounded-t-3xl">
+        <!-- alça de arrasto -->
+        <div class="absolute top-2.5 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-ice/50 z-20 sm:hidden"></div>
+        <img :src="modal.p.img" :alt="modal.p.nome" class="h-full w-full object-cover"
+             @load="$el.classList.add('loaded')" x-effect="modal.open && $el.classList.remove('loaded')" />
+        <div class="absolute inset-0 bg-gradient-to-t from-[#161c23] via-transparent to-charcoal/30"></div>
+        <button @click="closeModal()" aria-label="Fechar"
+                class="absolute top-3.5 right-3.5 h-11 w-11 rounded-full glass flex items-center justify-center text-ice active:scale-95 hover:scale-105 transition">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+        <div class="absolute bottom-4 left-5 right-5">
+          <p class="text-[10px] tracking-[0.35em] uppercase"
+             :class="modal.p.tipo==='food' ? 'text-bordeauxlt' : (modal.p.tipo==='base' ? 'text-gold' : 'text-emeraldlt')"
+             x-text="modal.p.ato"></p>
+          <h3 class="font-serif text-[26px] text-ice leading-tight mt-1" x-text="modal.p.nome"></h3>
+        </div>
+      </div>
+
+      <div class="px-5 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] space-y-6">
+        <!-- meta rápida -->
+        <div class="grid grid-cols-3 gap-3">
+          <div class="rounded-xl bg-ink/60 border border-line/50 p-3">
+            <p class="text-[9px] tracking-widest uppercase text-faint">Horário ideal</p>
+            <p class="text-[13px] text-ice mt-1 font-medium" x-text="modal.p.horarioIdeal"></p>
+          </div>
+          <div class="rounded-xl bg-ink/60 border border-line/50 p-3">
+            <p class="text-[9px] tracking-widest uppercase text-faint">Custo</p>
+            <p class="text-[13px] text-ice mt-1 font-medium" x-text="modal.p.custo || 'Gratuito'"></p>
+          </div>
+          <div class="rounded-xl bg-ink/60 border border-line/50 p-3">
+            <p class="text-[9px] tracking-widest uppercase text-faint">Duração</p>
+            <p class="text-[13px] text-ice mt-1 font-medium" x-text="modal.p.duracao"></p>
+          </div>
+        </div>
+
+        <!-- descrição -->
+        <div>
+          <p class="text-[10px] tracking-[0.3em] uppercase text-emeraldlt mb-2">Descrição</p>
+          <p class="text-[14px] text-mute leading-relaxed font-light" x-text="modal.p.descricao"></p>
+        </div>
+
+        <!-- resumo histórico -->
+        <div class="border-l-2 border-emerald/50 pl-4">
+          <p class="text-[10px] tracking-[0.3em] uppercase text-faint mb-2">Resumo histórico</p>
+          <p class="text-[14px] text-mute leading-relaxed font-light" x-text="modal.p.historia"></p>
+        </div>
+
+        <!-- insights -->
+        <div>
+          <p class="text-[10px] tracking-[0.3em] uppercase text-gold mb-3">Insights curiosos</p>
+          <ul class="space-y-2.5">
+            <template x-for="ins in modal.p.insights" :key="ins">
+              <li class="flex gap-3 text-[13.5px] text-mute leading-relaxed font-light">
+                <span class="text-gold mt-1.5 shrink-0">✦</span>
+                <span x-text="ins"></span>
+              </li>
+            </template>
+          </ul>
+        </div>
+
+        <!-- ações -->
+        <div class="flex items-stretch gap-3">
+          <button @click="focusPoint(modal.p.id); closeModal()"
+                  class="flex-1 min-h-[52px] rounded-full py-3.5 text-[12px] tracking-[0.2em] uppercase font-medium transition
+                         border text-ice hover:bg-emerald/10 active:scale-[0.98]"
+                  :class="modal.p.tipo==='food' ? 'border-bordeaux/60 text-bordeauxlt hover:bg-bordeaux/10'
+                                                 : 'border-emerald/60 text-emeraldlt'">
+            Localizar no mapa
+          </button>
+          <!-- Abrir o ponto no Google Maps -->
+          <a :href="gmapsUrl(modal.p)" target="_blank" rel="noopener noreferrer"
+             aria-label="Abrir no Google Maps"
+             class="shrink-0 w-[52px] min-h-[52px] rounded-full border border-line flex items-center justify-center
+                    text-ice hover:bg-ice/5 active:scale-95 transition">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/>
+            </svg>
+          </a>
+        </div>
+        <p class="text-[10px] text-faint text-center -mt-3 tracking-wide">Abrir no Google Maps</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- LÓGICA + BANCO DE DADOS (JSON)                                 -->
+  <!-- ============================================================= -->
+  <script>
+    /* =========================================================================
+       BANCO DE DADOS — Roteiro linear de Noto (6 paragens, 3 atos · 08h30–13h30)
+       tipo: 'base' | 'foco' | 'food'
+       Imagens reais (Wikimedia Commons); links de rota abrem no Google Maps.
+       ========================================================================= */
+    const DB = {
+      centro: [36.8908, 15.0700],
+      atos: [
+        /* ===================== ATO I ===================== */
+        {
+          id: "ato-1",
+          faixa: "08h30 — 10h30",
+          titulo: "Ato I · O Eixo Ortogonal",
+          pontos: [
+            {
+              id: "porta-reale", tipo: "base", nome: "Porta Reale",
+              ato: "O Início", hora: "08h30", coord: [36.89040, 15.07120],
+              linha: "A entrada na malha urbana perfeitamente geométrica — engenharia urbana após o terramoto de 1693.",
+              img: "https://commons.wikimedia.org/wiki/Special:FilePath/Porta%20Reale%20%28Noto%29%2014%2001%202024%2001.jpg?width=900",
+              custo: "Gratuito", duracao: "15 min", horarioIdeal: "08h30 — luz da manhã no eixo do Corso",
+              descricao: "A Porta Reale (ou Porta Ferdinandea) marca o limiar oriental do Corso Vittorio Emanuele, o eixo perfeitamente reto que organiza Noto. Atravessá-la é entrar numa cidade desenhada como uma resposta matemática ao caos.",
+              historia: "Erguida em 1838 para a visita de Fernando II das Duas Sicílias, a porta encima o grande eixo cenográfico da Noto reconstruída após o terramoto de 1693, que arrasou a cidade antiga. A nova Noto foi planeada do zero numa grelha ortogonal — urbanismo barroco como engenharia.",
+              insights: [
+                "No alto, três símbolos: a torre (poder), o cão (fidelidade) e o pelicano (sacrifício).",
+                "Daqui o Corso sobe em linha reta, alinhando os principais palácios e igrejas.",
+                "A pedra é calcarenita local, dourada — a mesma de toda a cidade."
+              ]
+            },
+            {
+              id: "palazzo-nicolaci", tipo: "foco", nome: "Via Nicolaci e Palazzo Nicolaci",
+              ato: "Ato I · O Eixo Ortogonal", hora: "09h30", coord: [36.89148, 15.06987],
+              linha: "A exibição máxima do barroco siciliano — sacadas sustentadas por sereias e monstros esculpidos na pedra.",
+              img: "https://commons.wikimedia.org/wiki/Special:FilePath/Noto%2C%20palazzo%20nicolaci%2C%20balconi%2007%20mascheroni.JPG?width=900",
+              custo: "€€ · ~€5 (interior)", duracao: "30 min", horarioIdeal: "Manhã — a luz lateral revela os relevos",
+              descricao: "Na estreita Via Nicolaci, o Palazzo Nicolaci di Villadorata exibe seis varandas barrocas sustentadas por mísulas esculpidas: sereias, cavalos alados, leões, grifos e mascarões grotescos, talhados na calcarenita até o limite da sua tensão física.",
+              historia: "Construído em meados do século XVIII para a família Nicolaci, marqueses de Villadorata, é o ápice do barroco de Noto. As figuras das mísulas — cada varanda com um tema próprio — são consideradas a escultura decorativa mais teatral da Sicília.",
+              insights: [
+                "Cada varanda tem o seu bestiário: cavalos, sereias, leões, querubins.",
+                "A Via Nicolaci cobre-se de tapetes de flores na Infiorata, em maio.",
+                "A calcarenita é macia ao talhe e endurece com o tempo — perfeita para o excesso barroco."
+              ]
+            },
+            {
+              id: "cattedrale", tipo: "foco", nome: "Cattedrale di San Nicolò",
+              ato: "Ato I · O Eixo Ortogonal", hora: "10h30", coord: [36.89108, 15.06900],
+              linha: "Monumento de resiliência geológica — o teto desabou em 1996 e foi reconstruído cirurgicamente.",
+              img: "https://commons.wikimedia.org/wiki/Special:FilePath/Noto%20Cathedral%20BW%202025-04-26%2011-08-40.jpg?width=900",
+              custo: "Gratuito", duracao: "30 min", horarioIdeal: "Meio da manhã, sol de frente na escadaria",
+              descricao: "No topo de uma escadaria monumental de três lances, na Piazza Municipio, a Cattedrale di San Nicolò impõe escala e poder. Subir os degraus é uma encenação barroca da ascensão ao sagrado.",
+              historia: "Concluída no século XVIII e coroada por uma cúpula no século XIX, a catedral sofreu o colapso da cúpula e da nave em 1996, por falhas estruturais agravadas por abalos sísmicos. Foi reconstruída ao longo de uma década, combinando blocos originais e reforço moderno — reaberta em 2007.",
+              insights: [
+                "O colapso de 1996 não fez vítimas: ocorreu de madrugada, com a igreja vazia.",
+                "A reconstrução reutilizou blocos originais, numerados e recolocados peça a peça.",
+                "A escadaria é palco de casamentos e do grande desfile barroco da cidade."
+              ]
+            }
+          ]
+        },
+
+        /* ===================== ATO II ===================== */
+        {
+          id: "ato-2",
+          faixa: "11h30 — 12h30",
+          titulo: "Ato II · O Abastecimento",
+          pontos: [
+            {
+              id: "caffe-sicilia", tipo: "food", nome: "Caffè Sicilia",
+              ato: "Ato II · O Abastecimento", hora: "11h30", coord: [36.89075, 15.06985],
+              linha: "O abastecimento clássico — granita di mandorla com brioche quente, na casa de Corrado Assenza.",
+              img: "https://commons.wikimedia.org/wiki/Special:FilePath/Sagra%20del%20pesce%20spada%20Aci%20Trezza%202025%20-%20Granita%20and%20brioche.jpg?width=900",
+              custo: "€ · ~€5", duracao: "30 min", horarioIdeal: "11h30 — antes do calor do meio-dia",
+              descricao: "No Corso Vittorio Emanuele, 125, o lendário Caffè Sicilia de Corrado Assenza é peregrinação para gulosos. O foco: a autêntica granita di mandorla (amêndoa) com brioche quente, ou o cannolo siciliano montado na hora.",
+              historia: "Casa histórica de doçaria, o Caffè Sicilia tornou-se célebre mundialmente pela mestria de Corrado Assenza, que eleva a tradição siciliana — granitas, cassate, doces de amêndoa e fruta confitada — ao patamar da alta gastronomia.",
+              insights: [
+                "A granita de amêndoa é feita com amêndoas de Avola, jamais com pasta industrial.",
+                "Peça o brioche col tuppo para mergulhar na granita — o ritual local.",
+                "Assenza ganhou fama internacional após aparecer na série 'Chef's Table'."
+              ]
+            },
+            {
+              id: "sabbinirica", tipo: "food", nome: "Sabbinirica · Siculamente",
+              ato: "Ato II · O Abastecimento", hora: "12h30", coord: [36.89060, 15.07030],
+              linha: "O almoço tático — pães artesanais com porchetta, pecorino e creme de pistache de Bronte.",
+              img: "https://commons.wikimedia.org/wiki/Special:FilePath/Panino%20con%20porchetta%2001.jpg?width=900",
+              custo: "€ · ~€8", duracao: "30 min", horarioIdeal: "12h30 — denso, rápido, sem filas",
+              descricao: "No Corso Vittorio Emanuele, 93, a Siculamente serve panini artesanais densos e viscerais: porchetta, queijo pecorino, creme de pistache de Bronte e conservas sicilianas. Almoço tático — sabor máximo, tempo mínimo, sem perder tempo em filas.",
+              historia: "Siculamente é uma marca siciliana de identidade orgulhosa — o nome brinca com 'sicilianamente' — que se estende da moda à gastronomia de rua, celebrando os produtos da ilha sem cerimónia.",
+              insights: [
+                "O pistache de Bronte, D.O.P., cresce na lava do Etna — verde profundo e intenso.",
+                "A porchetta é assada lentamente e temperada com ervas.",
+                "Comer em pé, ao longo do Corso, faz parte da experiência."
+              ]
+            }
+          ]
+        },
+
+        /* ===================== ATO III ===================== */
+        {
+          id: "ato-3",
+          faixa: "13h30",
+          titulo: "Ato III · A Subversão da Linha",
+          pontos: [
+            {
+              id: "santa-chiara", tipo: "foco", nome: "Chiesa di Santa Chiara",
+              ato: "Ato III · A Subversão da Linha", hora: "13h30", coord: [36.89055, 15.07070],
+              linha: "Interior em planta elíptica que subverte as linhas retas — e a fuga silenciosa pela Via Cavour.",
+              img: "https://commons.wikimedia.org/wiki/Special:FilePath/Noto%2C%20chiesa%20di%20santa%20chiara.JPG?width=900",
+              custo: "€ · ~€2 (terraço)", duracao: "25 min", horarioIdeal: "Início da tarde, antes do fecho",
+              descricao: "Atrás de uma fachada sóbria, a Chiesa di Santa Chiara esconde um interior de planta elíptica que subverte a rigidez ortogonal de Noto. Do seu terraço abre-se a melhor vista sobre a cidade; a saída faz-se pela silenciosa Via Cavour.",
+              historia: "Projetada por Rosario Gagliardi no século XVIII — o arquiteto-chave do barroco de Noto — a igreja elíptica do antigo convento beneditino contrasta com a grelha urbana. A Via Cavour, paralela ao Corso, corre sobre a antiga falha topográfica que separava as classes aristocráticas do eixo popular.",
+              insights: [
+                "A planta elíptica é assinatura de Gagliardi — geometria curva dentro da cidade reta.",
+                "O terraço (acesso pago) oferece a vista panorâmica mais bela de Noto.",
+                "A Via Cavour era a rua das residências nobres, acima do eixo popular do Corso."
+              ]
+            }
+          ]
+        }
+      ]
+    };
+
+
+    /* =========================================================================
+       APLICAÇÃO (Alpine) — mapa, scroll-spy, flyTo, modal
+       ========================================================================= */
+    function ortigiaGuide() {
+      return {
+        atos: DB.atos,
+        map: null,
+        markers: {},
+        activeId: null,
+        activeLabel: "08h30",
+        modal: { open: false, p: {} },
+        _suppressSpy: false,
+        sheetScrolled: false,
+        _dy: 0, _y0: 0, _dragging: false,
+
+        // índice plano de todos os pontos
+        get allPontos() { return this.atos.flatMap(a => a.pontos); },
+
+        init() {
+          this.$nextTick(() => {
+            this.buildMap();
+            this.observeReveals();
+            this.observeSpy();
+          });
+          // reacerta o mapa ao girar o iPhone ou quando a barra do Safari muda de altura
+          window.addEventListener('resize', () => this.map && this.map.invalidateSize());
+          window.addEventListener('orientationchange', () =>
+            setTimeout(() => this.map && this.map.invalidateSize(), 300));
+        },
+
+        /* ---------- bottom sheet: progresso de rolagem ---------- */
+        onSheetScroll(e) { this.sheetScrolled = e.target.scrollTop > 480; },
+        scrollSheetTop() { this.$refs.sheet.scrollTo({ top: 0, behavior: 'smooth' }); },
+
+        /* ---------- modal: deslizar para baixo e fechar (iOS) ---------- */
+        dragStart(e) {
+          if (this.$refs.panel.scrollTop > 0) return;   // só inicia no topo
+          this._y0 = e.touches[0].clientY; this._dy = 0; this._dragging = true;
+          this.$refs.panel.style.transition = 'none';
+        },
+        dragMove(e) {
+          if (!this._dragging) return;
+          this._dy = Math.max(0, e.touches[0].clientY - this._y0);
+          this.$refs.panel.style.transform = `translateY(${this._dy}px)`;
+        },
+        dragEnd() {
+          if (!this._dragging) return;
+          this._dragging = false;
+          const p = this.$refs.panel;
+          p.style.transition = 'transform .28s cubic-bezier(.2,.7,.2,1)';
+          if (this._dy > 110) {                          // ultrapassou o limiar → fecha
+            p.style.transform = 'translateY(100%)';
+            setTimeout(() => { this.closeModal(); p.style.transform = ''; p.style.transition = ''; }, 240);
+          } else {                                       // volta ao lugar
+            p.style.transform = '';
+          }
+          this._dy = 0;
+        },
+
+        /* ---------- Mapa Leaflet (estilo escuro) ---------- */
+        buildMap() {
+          const start = () => {
+            this.map = L.map('map', {
+              center: DB.centro, zoom: 16, zoomControl: true,
+              attributionControl: true, scrollWheelZoom: false,
+              touchZoom: true, doubleClickZoom: true, tapTolerance: 18, bounceAtZoomLimits: false
+            });
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+              attribution: '© OpenStreetMap · © CARTO', maxZoom: 20, subdomains: 'abcd'
+            }).addTo(this.map);
+
+            // plota todos os pontos
+            this.allPontos.forEach(p => {
+              const cls = `pin pin-${p.tipo}`;
+              const icon = L.divIcon({
+                className: '', html: `<div class="${cls}" data-pin="${p.id}"><span class="pin-dot"></span></div>`,
+                iconSize: [34, 34], iconAnchor: [17, 17]
+              });
+              const m = L.marker(p.coord, { icon }).addTo(this.map);
+              m.on('click', () => {
+                (p.tipo === 'peripheral') ? this.scrollToPoint(p.id) : this.openModal(p);
+              });
+              this.markers[p.id] = m;
+            });
+
+            // ajusta o enquadramento aos pontos
+            const group = L.featureGroup(Object.values(this.markers));
+            this.map.fitBounds(group.getBounds().pad(0.25));
+            setTimeout(() => this.map.invalidateSize(), 200);
+
+            this.setActive(this.allPontos[0].id, false);
+          };
+          if (window.L) start(); else window.addEventListener('load', start, { once: true });
+        },
+
+        /* ---------- flyTo dinâmico ---------- */
+        focusPoint(id, fly = true) {
+          const p = this.allPontos.find(x => x.id === id);
+          if (!p || !this.map) return;
+          this.setActive(id, false);
+          if (fly) {
+            const zoom = (p.tipo === 'foco' || p.tipo === 'base' || p.tipo === 'food') ? 18 : 17;
+            this.map.flyTo(p.coord, zoom, { duration: 1.1, easeLinearity: 0.25 });
+          }
+        },
+
+        /* ---------- estado ativo (pin + label) ---------- */
+        setActive(id, fly = true) {
+          if (this.activeId === id) { if (fly) this._flyOnly(id); return; }
+          // limpa pin anterior
+          if (this.activeId && this.markers[this.activeId]) {
+            const el = this.markers[this.activeId].getElement()?.querySelector('.pin');
+            el && el.classList.remove('pin-active');
+          }
+          this.activeId = id;
+          const p = this.allPontos.find(x => x.id === id);
+          if (p) this.activeLabel = p.hora;
+          const cur = this.markers[id]?.getElement()?.querySelector('.pin');
+          cur && cur.classList.add('pin-active');
+          if (fly) this._flyOnly(id);
+        },
+        _flyOnly(id) {
+          const p = this.allPontos.find(x => x.id === id);
+          if (!p || !this.map) return;
+          const zoom = (p.tipo === 'peripheral') ? 17 : 18;
+          this.map.flyTo(p.coord, zoom, { duration: 1.1, easeLinearity: 0.25 });
+        },
+
+        /* ---------- scroll-spy: timeline → mapa ---------- */
+        observeSpy() {
+          const opts = { root: this.$refs.sheet, rootMargin: '-42% 0px -45% 0px', threshold: 0 };
+          const io = new IntersectionObserver((entries) => {
+            if (this._suppressSpy) return;
+            entries.forEach(e => {
+              if (e.isIntersecting) {
+                const id = e.target.getAttribute('data-ponto');
+                if (id && id !== this.activeId) this.setActive(id, true);
+              }
+            });
+          }, opts);
+          document.querySelectorAll('[data-ponto]').forEach(el => io.observe(el));
+        },
+
+        /* ---------- reveal (fade-in no scroll) ---------- */
+        observeReveals() {
+          const io = new IntersectionObserver((entries) => {
+            entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+          }, { root: this.$refs.sheet, threshold: 0.12 });
+          document.querySelectorAll('[data-reveal]').forEach(el => io.observe(el));
+        },
+
+        /* ---------- scroll suave até o card (mapa → timeline) ---------- */
+        scrollToPoint(id) {
+          const el = document.querySelector(`[data-ponto="${id}"]`);
+          if (!el) return;
+          this._suppressSpy = true;
+          this.setActive(id, true);
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setTimeout(() => { this._suppressSpy = false; }, 900);
+        },
+
+        /* ---------- modal ---------- */
+        openModal(p) {
+          this.modal.p = p; this.modal.open = true;
+          if (this.$refs.sheet) this.$refs.sheet.style.overflow = 'hidden';  // congela o fundo
+          this.focusPoint(p.id);
+        },
+        closeModal() {
+          this.modal.open = false;
+          if (this.$refs.sheet) this.$refs.sheet.style.overflow = '';
+        },
+
+        /* ---------- link para o Google Maps ---------- */
+        gmapsUrl(p) {
+          if (!p || !p.coord) return 'https://www.google.com/maps';
+          const [lat, lng] = p.coord;
+          const q = encodeURIComponent(`${p.nome}, Noto, Sicília`);
+          // abre o ponto exato (coordenadas) já rotulado com o nome do local
+          return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}&query_place=${q}`;
+        }
+      };
+    }
+
+    // fecha modal com ESC
+    window.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        const root = document.querySelector('[x-data]');
+        root && root._x_dataStack && root._x_dataStack[0].closeModal();
+      }
+    });
+  </script>
+</body>
+</html>
