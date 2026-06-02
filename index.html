@@ -143,7 +143,7 @@
                 bg-gradient-to-b from-charcoal via-charcoal/75 to-transparent">
       <p class="text-[0.625rem] tracking-[0.45em] text-ice/60 uppercase">Sicília · Val di Noto</p>
       <h1 class="font-serif text-2xl text-ice mt-1 leading-none drop-shadow-[0_1px_8px_rgba(0,0,0,.6)]">Noto</h1>
-      <p class="text-[0.6875rem] text-ice/75 mt-1.5 tracking-wide">Uma manhã · 08h30 → 13h30 · 6 paragens</p>
+      <p class="text-[0.6875rem] text-ice/75 mt-1.5 tracking-wide">Uma manhã · 08h15 → 13h30 · 7 paragens</p>
     </div>
   </header>
 
@@ -311,7 +311,7 @@
             é uma decisão deliberada contra a linha reta.”
           </p>
           <p class="text-[0.6875rem] text-faint mt-6 leading-relaxed font-light border-t border-line/50 pt-5">
-            Roteiro completo — <span class="text-mute">6 paragens</span> em três atos, das 08h30 às 13h30,
+            Roteiro completo — <span class="text-mute">7 paragens</span> em três atos, das 08h15 às 13h30,
             subindo o Corso Vittorio Emanuele. Toque nos pontos de <span class="text-emeraldlt">foco</span> e nas
             <span class="text-bordeauxlt">pausas</span> para abrir os detalhes ou a rota no Google Maps;
             role para que o mapa siga a jornada.
@@ -336,6 +336,7 @@
               <li>· <span class="text-mute">Granita com brioche</span> (Caffè Sicilia) — Auregann, CC BY-SA 4.0</li>
               <li>· <span class="text-mute">Panino com porchetta</span> (Siculamente) — Nicholas Gemini, CC BY-SA 4.0</li>
               <li>· <span class="text-mute">Chiesa di Santa Chiara</span> — sailko, CC BY 2.5</li>
+              <li>· <span class="text-mute">Via Cavour</span> (Parcheggio Centrale) — sailko, CC BY 2.5</li>
             </ul>
           </details>
         </div>
@@ -408,6 +409,15 @@
           </div>
         </div>
 
+        <!-- endereço (quando houver) -->
+        <div x-show="modal.p.endereco" class="flex items-start gap-2.5 rounded-xl bg-ink/60 border border-line/50 p-3">
+          <svg class="w-4 h-4 mt-0.5 shrink-0 text-gold" aria-hidden="true" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+          <div>
+            <p class="text-[0.5625rem] tracking-widest uppercase text-faint">Endereço</p>
+            <p class="text-[0.8125rem] text-ice mt-0.5 leading-snug" x-text="modal.p.endereco"></p>
+          </div>
+        </div>
+
         <!-- descrição -->
         <div>
           <p class="text-[0.625rem] tracking-[0.3em] uppercase text-emeraldlt mb-2">Descrição</p>
@@ -462,7 +472,7 @@
   <!-- ============================================================= -->
   <script>
     /* =========================================================================
-       BANCO DE DADOS — Roteiro linear de Noto (6 paragens, 3 atos · 08h30–13h30)
+       BANCO DE DADOS — Roteiro linear de Noto (7 paragens, 3 atos · 08h15–13h30)
        tipo: 'base' | 'foco' | 'food'
        Imagens reais (Wikimedia Commons); links de rota abrem no Google Maps.
        ========================================================================= */
@@ -476,8 +486,23 @@
           titulo: "Ato I · O Eixo Ortogonal",
           pontos: [
             {
-              id: "porta-reale", tipo: "base", nome: "Porta Reale",
-              ato: "O Início", hora: "08h30", coord: [36.89040, 15.07120],
+              id: "parcheggio-centrale", tipo: "base", nome: "Parcheggio Centrale",
+              ato: "Ponto de Partida", hora: "08h15", coord: [36.8912012, 15.0747711],
+              endereco: "Via Camillo Benso Conte di Cavour, 96017 Noto SR, Itália",
+              linha: "O ponto de partida — estacione aqui, na Via Cavour, e desça a pé até Porta Reale.",
+              img: "https://commons.wikimedia.org/wiki/Special:FilePath/Noto%2C%20via%20cavour%2001.JPG?width=900",
+              custo: "€ · estacionamento", duracao: "—", horarioIdeal: "08h15 — cedo, antes do calor e dos grupos",
+              descricao: "O Parcheggio Centrale, na Via Camillo Benso Conte di Cavour, é o estacionamento mais prático para começar a pé. A Via Cavour corre paralela ao Corso, um piso acima — a antiga rua das residências nobres.",
+              historia: "Noto move-se inteira a pé: o centro histórico, reconstruído em grelha barroca após o terramoto de 1693, é compacto e em subida. Deixar o carro na Via Cavour evita as ruas restritas e coloca-se a poucos minutos de Porta Reale e do Corso.",
+              insights: [
+                "Da Via Cavour, desça uma quadra até o Corso Vittorio Emanuele — o eixo da jornada.",
+                "É também a rua por onde a jornada termina, vinda de Santa Chiara: o trajeto fecha-se aqui.",
+                "Chegue cedo: as vagas centrais enchem antes das 10h em alta temporada."
+              ]
+            },
+            {
+              id: "porta-reale", tipo: "foco", nome: "Porta Reale",
+              ato: "Ato I · O Eixo Ortogonal", hora: "08h30", coord: [36.89040, 15.07120],
               linha: "A entrada na malha urbana perfeitamente geométrica — engenharia urbana após o terramoto de 1693.",
               img: "https://commons.wikimedia.org/wiki/Special:FilePath/Porta%20Reale%20%28Noto%29%2014%2001%202024%2001.jpg?width=900",
               custo: "Gratuito", duracao: "15 min", horarioIdeal: "08h30 — luz da manhã no eixo do Corso",
@@ -592,7 +617,7 @@
         map: null,
         markers: {},
         activeId: null,
-        activeLabel: "08h30",
+        activeLabel: "08h15",
         modal: { open: false, p: {} },
         _suppressSpy: false,
         sheetScrolled: false,
@@ -761,8 +786,8 @@
         gmapsUrl(p) {
           if (!p || !p.coord) return 'https://www.google.com/maps';
           const [lat, lng] = p.coord;
-          const q = encodeURIComponent(`${p.nome}, Noto, Sicília`);
-          // abre o ponto exato (coordenadas) já rotulado com o nome do local
+          // se houver endereço, busca por ele (mais preciso); senão, pelas coordenadas rotuladas
+          const q = encodeURIComponent(p.endereco ? p.endereco : `${p.nome}, Noto, Sicília`);
           return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}&query_place=${q}`;
         }
       };
